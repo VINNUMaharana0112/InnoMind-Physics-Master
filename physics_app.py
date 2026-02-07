@@ -9,7 +9,7 @@ st.set_page_config(page_title="InnoMind Physics Master", layout="wide")
 
 # Connect to Gemini AI
 try:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    genai.configure(api_key=st.secrets["AIzaSyBalSvwtNxPq04PW4VVZ9cyZ1BEshHG_iY"])
     model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception as e:
     st.error("⚠️ AI Key Missing. Please add GOOGLE_API_KEY to secrets.")
@@ -113,10 +113,10 @@ else:
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("### Step 1: Pay Fees")
-            st.markdown("**Amount: ₹999 (Lifetime)**") # You can change price
+            st.markdown("**Amount: ₹1999 (Lifetime)**") # You can change price
             # REPLACE WITH YOUR ACTUAL QR CODE IMAGE LINK OR UPLOAD
-            st.image("https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg", caption="Scan to Pay via UPI", width=200)
-            st.markdown("**UPI ID:** your-upi-id@bank") 
+            st.image("qrcode.png", caption="Scan to Pay via UPI", width=200)
+            st.markdown("**UPI ID:** 9372097708@idfcfirst") 
             
         with col2:
             st.markdown("### Step 2: Verify")
@@ -195,4 +195,5 @@ else:
                     if 'link' in res:
                         st.markdown(f"[Download/View PDF]({res['link']})")
                     if 'content' in res:
+
                         st.markdown(res['content'])
