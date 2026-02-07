@@ -118,7 +118,7 @@ else:
             st.markdown("### Step 1: Pay Fees")
             st.markdown("**Amount: ₹1999 (Lifetime)**") # You can change price
             # REPLACE WITH YOUR ACTUAL QR CODE IMAGE LINK OR UPLOAD
-            st.image("qrcode.png", caption="Scan to Pay via UPI", width=200)
+            st.image("qrcode.jpeg", caption="Scan to Pay via UPI", width=200)
             st.markdown("**UPI ID:** 9372097708@idfcfirst") 
             
         with col2:
@@ -216,4 +216,5 @@ else:
                     if 'content' in res:
 
                         st.markdown(res['content'])
+
 
