@@ -53,8 +53,11 @@ def register_user(email, password, name, phone):
     users_ref.add(new_user)
     return True
 
-def get_ai_solution(prompt, image=None):
-    """Sends physics question to Gemini AI"""
+def get_ai_solution(prompt, model_name, image=None):
+    """Sends physics question to the specific Gemini AI Model"""
+    # Initialize the specific model selected by the user
+    model = genai.GenerativeModel(model_name)
+    
     system_prompt = """
     You are an expert Physics Professor for M.Sc. students. 
     Solve the problem step-by-step. 
@@ -146,8 +149,26 @@ else:
 
         if menu == "🤖 AI Physics Solver":
             st.header("💡 Instant Physics Solutions")
+            
+            # --- MODEL SELECTION ---
+            col_mode, col_blank = st.columns([1, 1])
+            with col_mode:
+                model_choice = st.selectbox(
+                    "Select AI Tutor Level:",
+                    ["Standard (Gemini 1.5 Flash)", "Advanced (Gemini 1.5 Pro)"]
+                )
+            
+            # Map the friendly name to the API Model Name
+            if "Standard" in model_choice:
+                api_model = "gemini-1.5-flash"
+            else:
+                api_model = "gemini-1.5-pro" 
+                # Note: If your API key supports Gemini 3.0, change this to "gemini-3.0-pro"
+            
+            st.markdown(f"Using: **{model_choice}**")
             st.markdown("Ask any question regarding **M.Sc. Physics, NET, GATE**, or specific derivations.")
             
+            # --- INPUT METHOD ---
             input_method = st.radio("Input Method:", ["Type Question", "Upload Image"])
             
             user_question = ""
@@ -159,22 +180,20 @@ else:
                 uploaded_file = st.file_uploader("Upload an image of the problem", type=["jpg", "png", "jpeg"])
                 if uploaded_file:
                     user_image = Image.open(uploaded_file)
-                    st.image(user_image, caption="Uploaded Problem", use_container_width=True)
+                    st.image(user_image, caption="Uploaded Problem", width=300)
                     user_question = st.text_input("Add any specific instructions (optional):")
 
             if st.button("Get Solution"):
                 if user_question or user_image:
-                    with st.spinner("Analyzing Physics concepts..."):
-                        # Call AI
+                    with st.spinner(f"Analyzing with {model_choice}..."):
+                        # PASS THE MODEL NAME HERE
                         if input_method == "Upload Image" and user_image:
-                            solution = get_ai_solution(user_question if user_question else "Solve this", user_image)
+                            solution = get_ai_solution(user_question if user_question else "Solve this", api_model, user_image)
                         else:
-                            solution = get_ai_solution(user_question)
+                            solution = get_ai_solution(user_question, api_model)
                         
                         st.markdown("### 🎓 Detailed Solution:")
-                        st.markdown(solution) # Markdown renders LaTeX automatically
-                        
-                        # Save query to history (optional)
+                        st.markdown(solution)
                 else:
                     st.warning("Please provide a question or image.")
 
@@ -197,3 +216,4 @@ else:
                     if 'content' in res:
 
                         st.markdown(res['content'])
+
