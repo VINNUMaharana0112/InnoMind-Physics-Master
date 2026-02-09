@@ -8,11 +8,19 @@ from PIL import Image
 st.set_page_config(page_title="InnoMind Physics Master", layout="wide")
 
 # Connect to Gemini AI
+# --- DEBUG CONNECTION BLOCK ---
 try:
-    genai.configure(api_key=st.secrets["AIzaSyBalSvwtNxPq04PW4VVZ9cyZ1BEshHG_iY"])
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # 1. Check if Streamlit can even see the key
+    if "GOOGLE_API_KEY" not in st.secrets:
+        st.error("❌ Streamlit says: GOOGLE_API_KEY is NOT in the secrets file.")
+        st.write("Available keys:", list(st.secrets.keys())) # This lists what IT sees
+    else:
+        # 2. Try to configure
+        genai.configure(api_key=st.secrets["AIzaSyBalSvwtNxPq04PW4VVZ9cyZ1BEshHG_iY"])
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        # st.success("✅ AI Connected Successfully!") # Uncomment to confirm success
 except Exception as e:
-    st.error("⚠️ AI Key Missing. Please add GOOGLE_API_KEY to secrets.")
+    st.error(f"⚠️ CRITICAL ERROR: {e}")
 
 # Connect to Firebase
 if not firebase_admin._apps:
@@ -216,6 +224,7 @@ else:
                     if 'content' in res:
 
                         st.markdown(res['content'])
+
 
 
 
