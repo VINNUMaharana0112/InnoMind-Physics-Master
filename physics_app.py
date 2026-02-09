@@ -63,8 +63,8 @@ def register_user(email, password, name, phone):
 
 def get_ai_solution(prompt, model_name, image=None):
     """Sends physics question to the specific Gemini AI Model"""
-    # Initialize the specific model selected by the user
-    model = genai.GenerativeModel(model_name)
+    # SAFE MODE
+    model = genai.GenerativeModel('gemini-pro')
     
     system_prompt = """
     You are an expert Physics Professor for M.Sc. students. 
@@ -163,14 +163,14 @@ else:
             with col_mode:
                 model_choice = st.selectbox(
                     "Select AI Tutor Level:",
-                    ["Standard (Gemini 1.5 Flash)", "Advanced (Gemini 3.0 Pro)"]
+                    ["Standard (Gemini 1.5 Flash)", "Advanced (Gemini Pro)"]
                 )
             
             # Map the friendly name to the API Model Name
             if "Standard" in model_choice:
-                api_model = "gemini-1.5-flash"
+                api_model = "gemini-pro"
             else:
-                api_model = "gemini-3.0-pro" 
+                api_model = "gemini-pro" 
                 # Note: If your API key supports Gemini 3.0, change this to "gemini-3.0-pro"
             
             st.markdown(f"Using: **{model_choice}**")
@@ -224,6 +224,7 @@ else:
                     if 'content' in res:
 
                         st.markdown(res['content'])
+
 
 
 
