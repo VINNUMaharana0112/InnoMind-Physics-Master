@@ -155,14 +155,14 @@ else:
             with col_mode:
                 model_choice = st.selectbox(
                     "Select AI Tutor Level:",
-                    ["Standard (Gemini 1.5 Flash)", "Advanced (Gemini 1.5 Pro)"]
+                    ["Standard (Gemini 1.5 Flash)", "Advanced (Gemini 3.0 Pro)"]
                 )
             
             # Map the friendly name to the API Model Name
             if "Standard" in model_choice:
                 api_model = "gemini-1.5-flash"
             else:
-                api_model = "gemini-1.5-pro" 
+                api_model = "gemini-3.0-pro" 
                 # Note: If your API key supports Gemini 3.0, change this to "gemini-3.0-pro"
             
             st.markdown(f"Using: **{model_choice}**")
@@ -216,5 +216,6 @@ else:
                     if 'content' in res:
 
                         st.markdown(res['content'])
+
 
 
