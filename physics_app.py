@@ -16,7 +16,7 @@ try:
         st.write("Available keys:", list(st.secrets.keys())) # This lists what IT sees
     else:
         # 2. Try to configure
-        genai.configure(api_key=st.secrets["AIzaSyBalSvwtNxPq04PW4VVZ9cyZ1BEshHG_iY"])
+        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         model = genai.GenerativeModel('gemini-1.5-flash')
         # st.success("✅ AI Connected Successfully!") # Uncomment to confirm success
 except Exception as e:
@@ -224,6 +224,7 @@ else:
                     if 'content' in res:
 
                         st.markdown(res['content'])
+
 
 
 
