@@ -5,228 +5,212 @@ import google.generativeai as genai
 from PIL import Image
 
 # --- 1. SETUP & CONFIGURATION ---
-st.set_page_config(page_title="InnoMind Physics Master", layout="wide")
+st.set_page_config(page_title="InnoMind LMS", page_icon="⚛️", layout="wide")
 
-# Connect to Gemini AI
 # --- DEBUG CONNECTION BLOCK ---
+if "firebase" not in st.secrets:
+    st.error("Secrets not found. Please add [firebase] to Streamlit Secrets.")
+    st.stop()
+
+# Connect to Firestore
 try:
-    # 1. Check if Streamlit can even see the key
-    if "GOOGLE_API_KEY" not in st.secrets:
-        st.error("❌ Streamlit says: GOOGLE_API_KEY is NOT in the secrets file.")
-        st.write("Available keys:", list(st.secrets.keys())) # This lists what IT sees
-    else:
-        # 2. Try to configure
-        genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        # st.success("✅ AI Connected Successfully!") # Uncomment to confirm success
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(dict(st.secrets["firebase"]))
+        firebase_admin.initialize_app(cred)
+    db = firestore.client()
 except Exception as e:
-    st.error(f"⚠️ CRITICAL ERROR: {e}")
+    st.error(f"Failed to connect to Database: {e}")
 
-# Connect to Firebase
-if not firebase_admin._apps:
-    key_dict = st.secrets["firebase"]
-    cred = credentials.Certificate(dict(key_dict))
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
+# Connect to Gemini (Optional AI Fallback)
+if "GOOGLE_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- 2. SESSION STATE MANAGEMENT ---
-if 'user_doc' not in st.session_state:
-    st.session_state.user_doc = None
+# --- 2. HELPER FUNCTIONS ---
+
+def get_metadata_options(field_name):
+    """Fetches dropdown options from Firestore"""
+    try:
+        doc = db.collection('lms_metadata').document('structure').get()
+        if doc.exists:
+            return ["Select"] + doc.to_dict().get(field_name, [])
+        return ["Select"]
+    except:
+        return ["Select"]
+
+def get_ai_solution(question_text):
+    """Fallback: Asks Gemini if answer is not in DB"""
+    try:
+        prompt = f"Solve this physics question in detail using LaTeX for math: {question_text}"
+        response = model.generate_content(prompt)
+        return response.text
+    except:
+        return "AI Service Unavailable."
+
+# --- 3. MAIN APPLICATION ---
+
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
-# --- 3. HELPER FUNCTIONS ---
-def login_user(email, password):
-    users_ref = db.collection('physics_users') # New Collection for Physics App
-    query = users_ref.where('email', '==', email).where('password', '==', password).stream()
-    for doc in query:
-        return doc
-    return None
-
-def register_user(email, password, name, phone):
-    users_ref = db.collection('physics_users')
-    # Check if exists
-    if len(list(users_ref.where('email', '==', email).stream())) > 0:
-        return False
-    
-    # Create new user with "pending" status
-    new_user = {
-        'name': name,
-        'email': email,
-        'password': password,
-        'phone': phone,
-        'payment_status': 'pending',  # Default is locked
-        'joined_date': firestore.SERVER_TIMESTAMP
-    }
-    users_ref.add(new_user)
-    return True
-
-def get_ai_solution(prompt, model_name, image=None):
-    """Sends physics question to the specific Gemini AI Model"""
-    # SAFE MODE
-    model = genai.GenerativeModel('gemini-pro')
-    
-    system_prompt = """
-    You are an expert Physics Professor for M.Sc. students. 
-    Solve the problem step-by-step. 
-    Use LaTeX for all mathematical equations (enclose in $ signs). 
-    Explain the physical concepts clearly.
-    """
-    try:
-        if image:
-            response = model.generate_content([system_prompt, prompt, image])
-        else:
-            response = model.generate_content([system_prompt, prompt])
-        return response.text
-    except Exception as e:
-        return f"AI Error: {e}"
-
-# --- 4. MAIN APP LOGIC ---
-
-# sidebar for Login/Signup
+# LOGIN SCREEN
 if not st.session_state.logged_in:
-    st.title("⚛️ InnoMind Physics Master")
-    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    st.title("🎓 InnoMind Digital Campus")
+    
+    tab1, tab2 = st.tabs(["Student Login", "Guest Access"])
     
     with tab1:
         email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
+        pwd = st.text_input("Password", type="password")
         if st.button("Login"):
-            user = login_user(email, password)
-            if user:
-                st.session_state.user_doc = user.to_dict()
-                st.session_state.user_id = user.id
+            # Simple check (You can upgrade this to real auth later)
+            users = db.collection('physics_users').where('email', '==', email).where('password', '==', pwd).stream()
+            if len(list(users)) > 0:
                 st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("Invalid email or password.")
-                
+                st.error("Invalid Credentials")
+    
     with tab2:
-        new_name = st.text_input("Full Name")
-        new_email = st.text_input("Email Address")
-        new_phone = st.text_input("Phone Number")
-        new_pass = st.text_input("Create Password", type="password")
-        if st.button("Create Account"):
-            if register_user(new_email, new_pass, new_name, new_phone):
-                st.success("Account created! Please Login.")
-            else:
-                st.error("Email already exists.")
+        st.info("Guest access allows viewing structure but limits content.")
+        if st.button("Enter as Guest"):
+            st.session_state.logged_in = True
+            st.rerun()
 
 else:
-    # USER IS LOGGED IN
-    user_data = st.session_state.user_doc
+    # --- LOGGED IN DASHBOARD ---
     
-    # --- CHECK PAYMENT STATUS ---
-    if user_data.get('payment_status') != 'approved':
-        st.warning("🔒 Access Restricted")
-        st.info(f"Welcome, {user_data['name']}! To access the Physics Solver and Exams, please complete the one-time payment.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### Step 1: Pay Fees")
-            st.markdown("**Amount: ₹1999 (Lifetime)**") # You can change price
-            # REPLACE WITH YOUR ACTUAL QR CODE IMAGE LINK OR UPLOAD
-            st.image("qrcode.jpeg", caption="Scan to Pay via UPI", width=200)
-            st.markdown("**UPI ID:** 9372097708@idfcfirst") 
-            
-        with col2:
-            st.markdown("### Step 2: Verify")
-            st.write("After paying, enter the Transaction ID below. Admin will approve within 24 hours.")
-            txn_id = st.text_input("Transaction ID / Reference No.")
-            if st.button("Submit for Approval"):
-                # Update user doc with txn id
-                db.collection('physics_users').document(st.session_state.user_id).update({
-                    'transaction_id': txn_id,
-                    'payment_status': 'submitted'
-                })
-                st.success("Submitted! Please wait for Admin approval.")
-                
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-            
+    # SIDEBAR: THE HIERARCHY SELECTOR
+    st.sidebar.title("📚 Course Navigator")
+    
+    # 1. Course Selection
+    course = st.sidebar.selectbox("1. Course", get_metadata_options("courses"))
+    board = st.sidebar.selectbox("2. Board/University", get_metadata_options("boards"))
+    year = st.sidebar.selectbox("3. Year/Semester", get_metadata_options("years"))
+    paper = st.sidebar.selectbox("4. Paper Name", get_metadata_options("papers"))
+    block = st.sidebar.selectbox("5. Block/Part", get_metadata_options("blocks"))
+    topic = st.sidebar.selectbox("6. Topic", get_metadata_options("topics"))
+    
+    st.sidebar.markdown("---")
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+
+    # MAIN CONTENT AREA
+    st.title(f"{topic if topic != 'Select' else 'Welcome to InnoMind'}")
+    
+    if "Select" in [course, board, year, paper, block, topic]:
+        st.info("👈 Please select all options in the Sidebar to access content.")
+        st.image("https://cdn.dribbble.com/users/118712/screenshots/3736506/books-stack.png", width=300)
     else:
-        # --- MAIN APP (PAID USER) ---
-        st.sidebar.title(f"👨‍🎓 {user_data['name']}")
-        st.sidebar.success("✅ Premium Member")
-        if st.sidebar.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
+        # FILTER: Show Content Types
+        resource_type = st.radio("Select Resource Type:", 
+            ["📖 Theory Notes", "📝 Assignments", "⚗️ Derivations", "🧮 Problems", 
+             "❓ SAQs/PYQs (Search)", "☑️ MCQs (Quiz)"], 
+            horizontal=True)
 
-        menu = st.sidebar.radio("Menu", ["🤖 AI Physics Solver", "📝 Exam Portal", "📚 Resources"])
+        st.markdown("---")
 
-        if menu == "🤖 AI Physics Solver":
-            st.header("💡 Instant Physics Solutions")
+        # --- LOGIC 1: STATIC PDF FILES ---
+        if resource_type in ["📖 Theory Notes", "📝 Assignments", "⚗️ Derivations", "🧮 Problems"]:
+            # Map friendly name to DB name
+            db_type_map = {
+                "📖 Theory Notes": "Theory Note",
+                "📝 Assignments": "Assignments",
+                "⚗️ Derivations": "Derivations",
+                "🧮 Problems": "Problems"
+            }
+            db_type = db_type_map[resource_type]
             
-            # --- MODEL SELECTION ---
-            col_mode, col_blank = st.columns([1, 1])
-            with col_mode:
-                model_choice = st.selectbox(
-                    "Select AI Tutor Level:",
-                    ["Standard (Gemini 1.5 Flash)", "Advanced (Gemini Pro)"]
-                )
+            st.subheader(f"{resource_type} for {topic}")
             
-            # Map the friendly name to the API Model Name
-            if "Standard" in model_choice:
-                api_model = "gemini-pro"
-            else:
-                api_model = "gemini-pro" 
-                # Note: If your API key supports Gemini 3.0, change this to "gemini-3.0-pro"
+            # Query Firestore
+            docs = db.collection('lms_static_files')\
+                .where('topic', '==', topic)\
+                .where('type', '==', db_type).stream()
             
-            st.markdown(f"Using: **{model_choice}**")
-            st.markdown("Ask any question regarding **M.Sc. Physics, NET, GATE**, or specific derivations.")
-            
-            # --- INPUT METHOD ---
-            input_method = st.radio("Input Method:", ["Type Question", "Upload Image"])
-            
-            user_question = ""
-            user_image = None
-            
-            if input_method == "Type Question":
-                user_question = st.text_area("Type your question here (LaTeX supported):", height=150)
-            else:
-                uploaded_file = st.file_uploader("Upload an image of the problem", type=["jpg", "png", "jpeg"])
-                if uploaded_file:
-                    user_image = Image.open(uploaded_file)
-                    st.image(user_image, caption="Uploaded Problem", width=300)
-                    user_question = st.text_input("Add any specific instructions (optional):")
-
-            if st.button("Get Solution"):
-                if user_question or user_image:
-                    with st.spinner(f"Analyzing with {model_choice}..."):
-                        # PASS THE MODEL NAME HERE
-                        if input_method == "Upload Image" and user_image:
-                            solution = get_ai_solution(user_question if user_question else "Solve this", api_model, user_image)
-                        else:
-                            solution = get_ai_solution(user_question, api_model)
-                        
-                        st.markdown("### 🎓 Detailed Solution:")
-                        st.markdown(solution)
-                else:
-                    st.warning("Please provide a question or image.")
-
-        elif menu == "📝 Exam Portal":
-            st.header("NET/GATE Mock Tests")
-            st.info("No active tests scheduled at the moment.")
-            # You can paste your previous Exam logic here later
-
-        elif menu == "📚 Resources":
-            st.header("Study Material")
-            st.write("Access your Notes, SAQs, and Derivations here.")
-            # This fetches from a 'resources' collection you will fill as Admin
-            docs = db.collection('physics_resources').stream()
+            found = False
             for doc in docs:
-                res = doc.to_dict()
-                with st.expander(f"📄 {res['title']} ({res['category']})"):
-                    st.write(res['description'])
-                    if 'link' in res:
-                        st.markdown(f"[Download/View PDF]({res['link']})")
-                    if 'content' in res:
+                found = True
+                data = doc.to_dict()
+                with st.expander(f"📄 {data.get('title', 'Untitled')}"):
+                    if data.get('is_drive_link'):
+                        st.markdown(f"**[Click to Open PDF]({data['file_url']})**")
+                    else:
+                        st.write("File format not supported.")
+            
+            if not found:
+                st.warning("No files uploaded for this section yet.")
 
-                        st.markdown(res['content'])
+        # --- LOGIC 2: SEARCHABLE DATABASE (SAQs, PYQs) ---
+        elif resource_type == "❓ SAQs/PYQs (Search)":
+            st.subheader("Search Question Bank")
+            
+            q_type = st.selectbox("Filter By:", ["SAQs", "PYQs", "Terminal Questions"])
+            
+            search_query = st.text_input("🔍 Search Question (Type keyword like 'Hamiltonian')", "")
+            
+            if search_query:
+                # 1. Fetch ALL questions for this topic & type
+                docs = db.collection('lms_qa_database')\
+                    .where('topic', '==', topic)\
+                    .where('type', '==', q_type).stream()
+                
+                results_found = False
+                for doc in docs:
+                    data = doc.to_dict()
+                    # 2. Python-side "Contains" Search (Simple fuzzy match)
+                    if search_query.lower() in data['question_text'].lower():
+                        results_found = True
+                        with st.container():
+                            st.markdown(f"**Q:** {data['question_text']}")
+                            with st.expander("Show Answer"):
+                                st.latex(data['answer_latex'])
+                                if data.get('image_url'):
+                                    st.image(data['image_url'])
+                            st.markdown("---")
+                
+                if not results_found:
+                    st.warning("Question not found in Database.")
+                    # AI FALLBACK
+                    if st.button("🤖 Ask AI to Solve Instead?"):
+                        with st.spinner("Generating Solution..."):
+                            sol = get_ai_solution(search_query)
+                            st.markdown("### AI Generated Solution:")
+                            st.write(sol)
 
-
-
-
-
-
+        # --- LOGIC 3: MCQs ---
+        elif resource_type == "☑️ MCQs (Quiz)":
+            st.subheader("Interactive Quiz")
+            
+            docs = db.collection('lms_mcqs')\
+                .where('topic', '==', topic).stream()
+            
+            count = 0
+            for doc in docs:
+                count += 1
+                data = doc.to_dict()
+                st.markdown(f"**Q{count}. {data['question']}**")
+                
+                # Radio buttons for options
+                opts = data['options']
+                choice = st.radio(f"Select Answer for Q{count}", 
+                                  [opts['A'], opts['B'], opts['C'], opts['D']], 
+                                  key=doc.id)
+                
+                # Check Answer Logic
+                if st.button(f"Check Answer Q{count}", key=f"btn_{doc.id}"):
+                    # Map selection back to Key (A, B, C, D)
+                    reverse_map = {v: k for k, v in opts.items()}
+                    user_key = reverse_map[choice]
+                    
+                    if user_key == data['correct_key']:
+                        st.success("✅ Correct!")
+                    else:
+                        st.error(f"❌ Incorrect. Correct was {data['correct_key']}")
+                    
+                    st.info(f"**Explanation:**")
+                    st.latex(data['explanation_latex'])
+                st.markdown("---")
+            
+            if count == 0:
+                st.warning("No MCQs added for this topic yet.")
